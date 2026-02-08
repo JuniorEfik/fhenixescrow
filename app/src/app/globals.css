@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  /* Primary Colors - Solana/Helius inspired */
+  --solana-green: #00ffa3;
+  --solana-blue: #03e1ff;
+  --solana-purple: #dc1fff;
+  --helius-orange: #ff6b35;
+  /* Background & Surface */
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #141419;
+  --bg-tertiary: #1c1c24;
+  --bg-glass: rgba(20, 20, 25, 0.8);
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0b0;
+  --text-muted: #6b6b80;
+  --text-accent: #00ffa3;
+  /* Legacy aliases for Tailwind */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-solana-green: var(--solana-green);
+  --color-solana-blue: var(--solana-blue);
+  --color-solana-purple: var(--solana-purple);
+  --color-helius-orange: var(--helius-orange);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-accent: var(--text-accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove black focus outline and tap flash on buttons/links */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+button::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--solana-green);
+  outline-offset: 2px;
+}
+
+/* Gradient utilities */
+.gradient-primary {
+  background: linear-gradient(135deg, #00ffa3 0%, #03e1ff 50%, #dc1fff 100%);
+}
+.gradient-dark {
+  background: linear-gradient(180deg, #0a0a0f 0%, #141419 100%);
+}
+.gradient-glow {
+  background: radial-gradient(circle at center, rgba(0, 255, 163, 0.15) 0%, transparent 70%);
+}

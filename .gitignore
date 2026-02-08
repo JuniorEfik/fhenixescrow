@@ -1,0 +1,7 @@
+build.md
+fhenix.md
+fhenix.png
+.env
+.env.netlify
+.env.*
+!.env.example

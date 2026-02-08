@@ -1,0 +1,18 @@
+# Deploy with: netlify deploy --prod (from app directory)
+# Link site first: netlify link --name fhenixescrow (or create in Netlify UI)
+#
+# IMPORTANT: Your local .env is NOT deployed. Set env vars in Netlify Dashboard:
+#   Site configuration → Environment variables
+#   Add ESCROW_CONTRACT_ADDRESS (required) and optionally:
+#   DISPUTE_RESOLVER_ADDRESS, CHAIN_ID, RPC_URL, RPC_URLS, FHENIX_ENV
+#   Use these exact names (no NEXT_PUBLIC_). The app reads them via /api/config.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"

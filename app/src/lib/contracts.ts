@@ -1,0 +1,80 @@
+/**
+ * PrivateEscrow ABI - key functions for frontend (ethers.js).
+ * Contract ids are bytes32 (hash). Matches contracts/src/PrivateEscrow.sol.
+ */
+export const PRIVATE_ESCROW_ABI = [
+  "function createContract(address client, address developer, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encryptedTotal, uint256 requiredAmountWei) external returns (bytes32)",
+  "function setTerms(bytes32 contractId, uint256 deadline) external",
+  "function addMilestone(bytes32 contractId, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encryptedAmount, string description) external",
+  "function updateMilestone(bytes32 contractId, uint256 milestoneIndex, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encryptedAmount, string description) external",
+  "function removeLastMilestone(bytes32 contractId) external",
+  "function milestoneDescriptions(bytes32 contractId, uint256 index) external view returns (string)",
+  "function milestoneCompletionComments(bytes32 contractId, uint256 index) external view returns (string)",
+  "function addDiscussionMessage(bytes32 contractId, string message) external",
+  "function discussionMessageCount(bytes32 contractId) external view returns (uint256)",
+  "function discussionSenders(bytes32 contractId, uint256 index) external view returns (address)",
+  "function discussionMessages(bytes32 contractId, uint256 index) external view returns (string)",
+  "function setUsername(string username) external",
+  "function usernames(address) external view returns (string)",
+  "function getAddressByUsername(string username) external view returns (address)",
+  "function createInvite(bool isClientSide, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encryptedTotal, uint256 requiredAmountWei) external returns (bytes32)",
+  "function acceptInvite(bytes32 inviteId) external returns (bytes32)",
+  "function bailOutInvite(bytes32 inviteId) external",
+  "function inviteCreator(bytes32) external view returns (address)",
+  "function inviteIsClientSide(bytes32) external view returns (bool)",
+  "function inviteAcceptedBy(bytes32) external view returns (address)",
+  "function inviteContractId(bytes32) external view returns (bytes32)",
+  "function contractToInvite(bytes32) external view returns (bytes32)",
+  "function signContract(bytes32 contractId) external",
+  "function fundEscrow(bytes32 contractId) external payable",
+  "function submitMilestone(bytes32 contractId, uint256 milestoneIndex, string comment) external",
+  "function approveMilestone(bytes32 contractId, uint256 milestoneIndex) external",
+  "function rejectMilestone(bytes32 contractId, uint256 milestoneIndex) external",
+  "function claimPayout(bytes32 contractId) external",
+  "function raiseDispute(bytes32 contractId) external",
+  "function resolveDispute(bytes32 contractId, bool clientWins) external",
+  "function requestCancel(bytes32 contractId) external",
+  "function cancelContract(bytes32 contractId) external",
+  "function claimRefund(bytes32 contractId) external",
+  "function getContract(bytes32 contractId) external view returns (address client, address developer, uint8 state, uint256 deadline, uint256 balance, uint256 createdAt, bool clientSigned, bool developerSigned, uint256 milestoneCount, uint256 approvedCount)",
+  "function clientCancelRequested(bytes32 contractId) external view returns (bool)",
+  "function developerCancelRequested(bytes32 contractId) external view returns (bool)",
+  "function userContractCount(address) external view returns (uint256)",
+  "function userContractIds(address, uint256) external view returns (bytes32)",
+  "function contractCreator(bytes32) external view returns (address)",
+  "function contracts(bytes32) external view returns (address client, address developer, uint8 state, uint256 deadline, uint256 balance, uint256 createdAt, bool clientSigned, bool developerSigned, uint256 milestoneCount, uint256 approvedCount, address judge, bool disputeResolved, bool clientWinsDispute)",
+  "function requiredFundAmount(bytes32) external view returns (uint256)",
+  "function milestones(bytes32, uint256) external view returns (bool submitted, bool approved, uint256 submittedAt)",
+  "event ContractCreated(bytes32 indexed contractId, address indexed client, address indexed developer)",
+  "event ContractSigned(bytes32 indexed contractId, address indexed signer)",
+  "event EscrowFunded(bytes32 indexed contractId, uint256 amount)",
+  "event MilestoneSubmitted(bytes32 indexed contractId, uint256 milestoneIndex)",
+  "event MilestoneApproved(bytes32 indexed contractId, uint256 milestoneIndex)",
+  "event PayoutClaimed(bytes32 indexed contractId, address indexed developer, uint256 amount)",
+  "event DisputeRaised(bytes32 indexed contractId, address indexed raisedBy)",
+  "event RefundClaimed(bytes32 indexed contractId, address indexed client, uint256 amount)",
+  "event ContractCancelled(bytes32 indexed contractId)",
+  "event DiscussionMessage(bytes32 indexed contractId, uint256 indexed index, address indexed sender)",
+  "event InviteCreated(bytes32 indexed inviteId, address creator, bool isClientSide)",
+  "event InviteAccepted(bytes32 indexed inviteId, address accepter, bytes32 contractId)",
+  "event InviteBailed(bytes32 indexed inviteId, address who)",
+] as const;
+
+export const CONTRACT_STATES = [
+  "DRAFT",
+  "SIGNED",
+  "FUNDED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "DISPUTED",
+  "CANCELLED",
+  "PAID_OUT",
+] as const;
+
+export type ContractStateKey = (typeof CONTRACT_STATES)[number];
+
+/** DisputeResolver ABI (for arbitrator resolution). */
+export const DISPUTE_RESOLVER_ABI = [
+  "function resolveDispute(bytes32 contractId, bool clientWins) external",
+  "function arbitrators(address) external view returns (bool)",
+] as const;
