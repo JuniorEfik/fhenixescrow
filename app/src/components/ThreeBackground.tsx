@@ -21,12 +21,13 @@ export default function ThreeBackground() {
     );
     camera.position.z = 50;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     containerRef.current.appendChild(renderer.domElement);
 
-    const particleCount = 800;
+    const isNarrow = window.innerWidth < 768;
+    const particleCount = isNarrow ? 320 : 600;
     const positions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3);
     const solanaColors = [

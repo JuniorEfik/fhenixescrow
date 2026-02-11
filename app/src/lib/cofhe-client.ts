@@ -55,9 +55,12 @@ async function ensureCofheInitialized(provider: BrowserProvider): Promise<void> 
 
 export async function encryptUint128Cofhe(
   provider: BrowserProvider,
-  value: bigint
+  value: bigint,
+  onProgress?: (message: string) => void
 ): Promise<InEuintLike> {
+  onProgress?.("Initializing encryption…");
   await ensureCofheInitialized(provider);
+  onProgress?.("Encrypting amount…");
   const { cofhejs, Encryptable } = await import("cofhejs/web");
   const result = await cofhejs.encrypt([Encryptable.uint128(value)]);
   if (!result.success || !result.data?.length) {
@@ -78,9 +81,12 @@ export async function encryptUint128Cofhe(
 
 export async function encryptUint32Cofhe(
   provider: BrowserProvider,
-  value: number
+  value: number,
+  onProgress?: (message: string) => void
 ): Promise<InEuintLike> {
+  onProgress?.("Initializing encryption…");
   await ensureCofheInitialized(provider);
+  onProgress?.("Encrypting milestone…");
   const { cofhejs, Encryptable } = await import("cofhejs/web");
   const result = await cofhejs.encrypt([Encryptable.uint32(BigInt(value))]);
   if (!result.success || !result.data?.length) {
@@ -101,4 +107,13 @@ export async function encryptUint32Cofhe(
 
 export function clearCofheClient(): void {
   cofheInitialized = false;
+}
+
+/**
+ * Best-effort preload: initialize CoFHE in the background so the first
+ * create/addMilestone click only needs encryption + tx (wallet appears faster).
+ * Safe to call; errors are swallowed.
+ */
+export function preloadCofhe(provider: BrowserProvider): void {
+  ensureCofheInitialized(provider).catch(() => {});
 }

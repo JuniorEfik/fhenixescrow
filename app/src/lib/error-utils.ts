@@ -2,6 +2,19 @@
  * Shared error message extraction and user-friendly suggestions.
  */
 
+/** True if the error is from the user rejecting the transaction in their wallet (e.g. MetaMask). */
+export function isUserRejection(e: unknown): boolean {
+  if (e && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    const code = o.code ?? (o.error && typeof o.error === "object" && (o.error as Record<string, unknown>).code);
+    if (code === 4001 || code === "ACTION_REJECTED") return true;
+    if (o.reason === "rejected") return true;
+    const msg = getErrorMessage(e).toLowerCase();
+    if (msg.includes("user rejected") || msg.includes("user denied") || msg.includes("rejected the request") || msg.includes("ethers-user-denied")) return true;
+  }
+  return false;
+}
+
 export function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (e && typeof e === "object") {

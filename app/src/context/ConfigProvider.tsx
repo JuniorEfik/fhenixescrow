@@ -74,8 +74,8 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
       {!configReady ? (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] text-white">
           <div className="text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite] mb-4" />
-            <p>Loading configuration…</p>
+            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[var(--solana-green)]/30 border-t-[var(--solana-green)] mb-3" aria-hidden />
+            <p className="text-sm text-[var(--text-muted)]">Loading…</p>
           </div>
         </div>
       ) : missingEscrow ? (

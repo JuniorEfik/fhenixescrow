@@ -9,10 +9,12 @@ import StatusBadge from "@/components/StatusBadge";
 import MilestoneProgress from "@/components/MilestoneProgress";
 import AnimatedButton from "@/components/AnimatedButton";
 import ContractLoader from "@/components/ContractLoader";
+import Modal from "@/components/Modal";
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { formatUsernameForDisplay } from "@/lib/username";
-import { getActionErrorMessage, getErrorSuggestion } from "@/lib/error-utils";
+import { getActionErrorMessage, getErrorSuggestion, isUserRejection } from "@/lib/error-utils";
 import { getDefaultChainId, getDisputeResolverAddress, getEscrowContractAddress } from "@/lib/constants";
+import { preloadCofhe } from "@/lib/cofhe-client";
 import { getEthersProvider, getReadOnlyProvider, switchToFhenixNetwork } from "@/lib/ethers-provider";
 import { formatEther, parseEther } from "ethers";
 import { format } from "date-fns";
@@ -77,6 +79,13 @@ export default function ContractDetailPage() {
   const [isArbitrator, setIsArbitrator] = useState(false);
   const [refetchLoading, setRefetchLoading] = useState(false);
   const [requiredFundAmountWei, setRequiredFundAmountWei] = useState<bigint | null>(null);
+  const [showCanceledPopup, setShowCanceledPopup] = useState(false);
+  const [showMilestoneTerminalPopup, setShowMilestoneTerminalPopup] = useState(false);
+  const [milestoneTerminalLines, setMilestoneTerminalLines] = useState<string[]>([]);
+
+  const milestoneTerminalLog = (message: string) => {
+    setMilestoneTerminalLines((prev) => [...prev, message]);
+  };
 
   const showErrorPopup = (message: string, suggestion?: string) => {
     if (errorPopupTimeoutRef.current) clearTimeout(errorPopupTimeoutRef.current);
@@ -91,6 +100,15 @@ export default function ContractDetailPage() {
       setSuccessMessage(null);
       successTimeoutRef.current = null;
     }, 3000);
+  };
+
+  /** On tx error: show "Transaction was canceled" popup for user rejection, else error popup. */
+  const handleActionError = (e: unknown) => {
+    if (isUserRejection(e)) {
+      setShowCanceledPopup(true);
+    } else {
+      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+    }
   };
 
   const copyContractId = () => {
@@ -266,7 +284,7 @@ export default function ContractDetailPage() {
         setFundAmount("");
       }
     } catch (e) {
-      if (showLoading) showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      if (showLoading) handleActionError(e);
     } finally {
       if (showLoading) setRefetchLoading(false);
     }
@@ -303,6 +321,10 @@ export default function ContractDetailPage() {
       if (errorPopupTimeoutRef.current) clearTimeout(errorPopupTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (provider) preloadCofhe(provider);
+  }, [provider]);
 
   useEffect(() => {
     const el = discussionListRef.current;
@@ -343,7 +365,7 @@ export default function ContractDetailPage() {
       router.refresh();
       setData((d) => (d ? { ...d, deadline: BigInt(deadline) } : null));
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -355,15 +377,19 @@ export default function ContractDetailPage() {
     setActionLoading(true);
     setAddMilestoneLoading(true);
     setError(null);
+    setShowMilestoneTerminalPopup(true);
+    setMilestoneTerminalLines(["$ Adding milestone…"]);
     try {
-      await escrow.addMilestone(provider, id, 1, addMilestoneDescription.trim() || "Milestone");
+      await escrow.addMilestone(provider, id, 1, addMilestoneDescription.trim() || "Milestone", milestoneTerminalLog);
+      milestoneTerminalLog("Done.");
       setShowAddMilestoneForm(false);
       setAddMilestoneDescription("");
       router.refresh();
       await new Promise((r) => setTimeout(r, 400));
       await refetchContractAndMilestones();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
+      milestoneTerminalLog(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setActionLoading(false);
       setAddMilestoneLoading(false);
@@ -386,7 +412,7 @@ export default function ContractDetailPage() {
         return next;
       });
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -412,7 +438,7 @@ export default function ContractDetailPage() {
       setNameMap((prev) => ({ ...prev, ...map }));
       router.refresh();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
       setSendDiscussionLoading(false);
@@ -430,7 +456,7 @@ export default function ContractDetailPage() {
       await new Promise((r) => setTimeout(r, 400));
       await refetchContractAndMilestones();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -460,7 +486,7 @@ export default function ContractDetailPage() {
       });
       router.refresh();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
       setSignContractLoading(false);
@@ -478,7 +504,7 @@ export default function ContractDetailPage() {
       const [, , , , balance] = await escrow.getContract(provider, id);
       setData((d) => (d ? { ...d, balance, state: 2 } : null));
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -503,7 +529,7 @@ export default function ContractDetailPage() {
       setData((d) => (d ? { ...d, state: 3 } : null));
       showSuccess("Milestone submitted");
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -527,7 +553,7 @@ export default function ContractDetailPage() {
       setData((d) => (d ? { ...d, approvedCount, state: approvedCount === milestoneCount ? 4 : 3 } : null));
       showSuccess("Milestone approved");
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -546,7 +572,7 @@ export default function ContractDetailPage() {
         return next;
       });
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -561,7 +587,7 @@ export default function ContractDetailPage() {
       router.refresh();
       setData((d) => (d ? { ...d, state: 7, balance: 0n } : null));
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -583,7 +609,7 @@ export default function ContractDetailPage() {
         setIsArbitrator(false);
       }
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -597,6 +623,8 @@ export default function ContractDetailPage() {
     (disputeInfo.judge.toLowerCase() === address.toLowerCase() ||
       disputeInfo.judge === ZERO_ADDRESS ||
       (!!judgeIsResolver && isArbitrator));
+  /** Only client, developer, and judge(s) can view an accepted contract. */
+  const canViewContract = isClient || isDeveloper || isJudge;
 
   const handleResolveDispute = async (clientWins: boolean) => {
     const escrow = escrowRef.current;
@@ -611,7 +639,7 @@ export default function ContractDetailPage() {
       router.refresh();
       await refetchContractAndMilestones();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -628,7 +656,7 @@ export default function ContractDetailPage() {
       if (isDeveloper) setDeveloperCancelRequested(true);
       router.refresh();
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -643,7 +671,7 @@ export default function ContractDetailPage() {
       router.refresh();
       setData((d) => (d ? { ...d, state: 6, balance: 0n } : null));
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -658,7 +686,7 @@ export default function ContractDetailPage() {
       router.refresh();
       setData((d) => (d ? { ...d, state: 6, balance: 0n } : null));
     } catch (e) {
-      showErrorPopup(getActionErrorMessage(e), getErrorSuggestion(getActionErrorMessage(e)));
+      handleActionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -687,6 +715,21 @@ export default function ContractDetailPage() {
       <main className="pt-24 px-4 max-w-4xl mx-auto">
         <GlassCard className="p-8 text-center">
           {error || "Contract not found"}
+        </GlassCard>
+      </main>
+    );
+  }
+
+  if (address && !canViewContract) {
+    return (
+      <main className="pt-24 px-4 max-w-4xl mx-auto">
+        <GlassCard className="p-8 text-center">
+          <p className="text-[var(--text-secondary)] mb-4">
+            You don&apos;t have permission to view this contract. Only the client, developer, and assigned judge(s) can view it.
+          </p>
+          <Link href="/dashboard" className="text-[var(--solana-green)] hover:underline font-medium">
+            Go to Dashboard
+          </Link>
         </GlassCard>
       </main>
     );
@@ -724,6 +767,42 @@ export default function ContractDetailPage() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-lg bg-[var(--solana-green)]/90 text-[var(--bg-primary)] font-medium text-sm shadow-lg" role="status" aria-live="polite">
           {successMessage}
         </div>
+      )}
+
+      {showCanceledPopup && (
+        <Modal title="Transaction was canceled" onClose={() => setShowCanceledPopup(false)}>
+          <p className="text-sm text-[var(--text-muted)] mb-4">
+            The transaction was canceled. You can try again when you&apos;re ready.
+          </p>
+          <AnimatedButton onClick={() => setShowCanceledPopup(false)} className="w-full">
+            OK
+          </AnimatedButton>
+        </Modal>
+      )}
+
+      {showMilestoneTerminalPopup && (
+        <Modal title="Adding milestone…" onClose={() => setShowMilestoneTerminalPopup(false)}>
+          <div
+            className="rounded-lg bg-[#0d1117] border border-white/10 p-4 font-mono text-sm text-[var(--solana-green)] overflow-x-auto min-h-[120px]"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}
+          >
+            {milestoneTerminalLines.map((line, i) => (
+              <div key={i} className="leading-relaxed">
+                {line.startsWith("Error:") ? (
+                  <span className="text-red-400">{line}</span>
+                ) : (
+                  line
+                )}
+              </div>
+            ))}
+            {addMilestoneLoading && (
+              <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--solana-green)] animate-pulse" aria-hidden />
+            )}
+          </div>
+          <AnimatedButton onClick={() => setShowMilestoneTerminalPopup(false)} className="w-full mt-4">
+            {addMilestoneLoading ? "Minimize" : "Close"}
+          </AnimatedButton>
+        </Modal>
       )}
 
       <div className="flex items-center gap-2 mb-6 flex-wrap">

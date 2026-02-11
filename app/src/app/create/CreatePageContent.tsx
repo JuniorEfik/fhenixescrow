@@ -1,15 +1,16 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { parseEther } from "ethers";
 import { useWallet } from "@/context/WalletContext";
 import GlassCard from "@/components/GlassCard";
 import AnimatedButton from "@/components/AnimatedButton";
 import Modal from "@/components/Modal";
 import Link from "next/link";
-import { getErrorMessage } from "@/lib/error-utils";
+import { getErrorMessage, isUserRejection } from "@/lib/error-utils";
 import { getEscrowContractAddress } from "@/lib/constants";
+import { preloadCofhe } from "@/lib/cofhe-client";
 
 type CreateMode = "address" | "link";
 
@@ -25,8 +26,19 @@ export default function CreatePageContent() {
   const [createdInviteId, setCreatedInviteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSamePartyPopup, setShowSamePartyPopup] = useState(false);
+  const [showCanceledPopup, setShowCanceledPopup] = useState(false);
+  const [showTerminalPopup, setShowTerminalPopup] = useState(false);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
 
   const isClient = role === "client";
+
+  const terminalLog = (message: string) => {
+    setTerminalLines((prev) => [...prev, message]);
+  };
+
+  useEffect(() => {
+    if (provider && address) preloadCofhe(provider);
+  }, [provider, address]);
 
   const resolveOtherPartyAddress = async (): Promise<string> => {
     const raw = otherParty.trim();
@@ -59,21 +71,31 @@ export default function CreatePageContent() {
     }
     setLoading(true);
     setError(null);
+    setShowTerminalPopup(true);
+    setTerminalLines(["$ Creating contract…"]);
     try {
+      terminalLog("Resolving party address…");
       const otherAddress = await resolveOtherPartyAddress();
       if (address && otherAddress.toLowerCase() === address.toLowerCase()) {
         setShowSamePartyPopup(true);
         setLoading(false);
+        setShowTerminalPopup(false);
         return;
       }
       const { runCreateContract } = await import("@/lib/createContractAction");
       const wei = parseEther(totalAmount.trim());
       const clientAddress = isClient ? address : otherAddress;
       const developerAddress = isClient ? otherAddress : address;
-      const { contractId } = await runCreateContract(provider, clientAddress, developerAddress, wei);
+      const { contractId } = await runCreateContract(provider, clientAddress, developerAddress, wei, terminalLog);
+      terminalLog("Done.");
       setCreatedId(contractId ?? null);
     } catch (e) {
-      setError(getErrorMessage(e));
+      if (isUserRejection(e)) {
+        setShowCanceledPopup(true);
+      } else {
+        setError(getErrorMessage(e));
+        terminalLog(`Error: ${getErrorMessage(e)}`);
+      }
       if (typeof window !== "undefined") console.error("[Create contract]", e);
     } finally {
       setLoading(false);
@@ -102,12 +124,20 @@ export default function CreatePageContent() {
     }
     setLoading(true);
     setError(null);
+    setShowTerminalPopup(true);
+    setTerminalLines(["$ Creating invite link…"]);
     try {
       const escrow = await import("@/lib/escrow-service");
-      const { inviteId } = await escrow.createInvite(provider, isClient, wei);
+      const { inviteId } = await escrow.createInvite(provider, isClient, wei, terminalLog);
+      terminalLog("Done.");
       setCreatedInviteId(inviteId ?? null);
     } catch (e) {
-      setError(getErrorMessage(e));
+      if (isUserRejection(e)) {
+        setShowCanceledPopup(true);
+      } else {
+        setError(getErrorMessage(e));
+        terminalLog(`Error: ${getErrorMessage(e)}`);
+      }
       if (typeof window !== "undefined") console.error("[Create invite]", e);
     } finally {
       setLoading(false);
@@ -234,8 +264,11 @@ export default function CreatePageContent() {
               </p>
             </div>
           )}
-          <AnimatedButton onClick={handleCreate} disabled={loading} className="w-full">
-            {loading ? (mode === "link" ? "Creating link..." : "Creating...") : mode === "link" ? "Create link" : "Create contract"}
+          <AnimatedButton onClick={handleCreate} disabled={loading} className="w-full inline-flex items-center justify-center gap-2">
+            {loading && (
+              <span className="inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+            )}
+            {loading ? (mode === "link" ? "Creating link" : "Creating") : mode === "link" ? "Create link" : "Create contract"}
           </AnimatedButton>
         </div>
         <Link href="/dashboard" className="block mt-4 text-center text-sm text-[var(--text-muted)] hover:text-white">
@@ -250,6 +283,42 @@ export default function CreatePageContent() {
           </p>
           <AnimatedButton onClick={() => setShowSamePartyPopup(false)} className="w-full">
             OK
+          </AnimatedButton>
+        </Modal>
+      )}
+
+      {showCanceledPopup && (
+        <Modal title="Contract creation was cancelled" onClose={() => setShowCanceledPopup(false)}>
+          <p className="text-sm text-[var(--text-muted)] mb-4">
+            The transaction was canceled. You can try again when you&apos;re ready.
+          </p>
+          <AnimatedButton onClick={() => setShowCanceledPopup(false)} className="w-full">
+            OK
+          </AnimatedButton>
+        </Modal>
+      )}
+
+      {showTerminalPopup && (
+        <Modal title="Creating…" onClose={() => setShowTerminalPopup(false)}>
+          <div
+            className="rounded-lg bg-[#0d1117] border border-white/10 p-4 font-mono text-sm text-[var(--solana-green)] overflow-x-auto min-h-[120px]"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)" }}
+          >
+            {terminalLines.map((line, i) => (
+              <div key={i} className="leading-relaxed">
+                {line.startsWith("Error:") ? (
+                  <span className="text-red-400">{line}</span>
+                ) : (
+                  line
+                )}
+              </div>
+            ))}
+            {loading && (
+              <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--solana-green)] animate-pulse" aria-hidden />
+            )}
+          </div>
+          <AnimatedButton onClick={() => setShowTerminalPopup(false)} className="w-full mt-4">
+            {loading ? "Minimize" : "Close"}
           </AnimatedButton>
         </Modal>
       )}

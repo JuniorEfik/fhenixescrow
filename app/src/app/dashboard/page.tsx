@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { useWallet } from "@/context/WalletContext";
 import StatusBadge from "@/components/StatusBadge";
@@ -23,6 +22,9 @@ interface ContractRow {
   milestoneCount: number;
   approvedCount: number;
 }
+
+/** Cache dashboard data per address so revisiting dashboard shows content immediately. */
+let dashboardCache: { address: string; list: ContractRow[]; nameMap: Record<string, string> } | null = null;
 
 async function fetchContracts(
   provider: NonNullable<ReturnType<typeof useWallet>["provider"]>,
@@ -79,7 +81,6 @@ function NavIcon({ d, className = "w-5 h-5" }: { d: string; className?: string }
 }
 
 export default function DashboardPage() {
-  const pathname = usePathname();
   const { address, provider } = useWallet();
   const escrowRef = useRef<typeof import("@/lib/escrow-service") | null>(null);
   const [contracts, setContracts] = useState<ContractRow[]>([]);
@@ -87,6 +88,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [createMenuBottomOpen, setCreateMenuBottomOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
+  const createMenuBottomRef = useRef<HTMLDivElement>(null);
+  const lastLoadAtRef = useRef<number>(0);
+  const FOCUS_REFETCH_MIN_MS = 30_000;
 
   const load = useCallback(async () => {
     if (!provider || !address) return;
@@ -97,6 +104,8 @@ export default function DashboardPage() {
       setContracts(list);
       setNameMap(map);
       setError(null);
+      dashboardCache = { address, list, nameMap: map };
+      lastLoadAtRef.current = Date.now();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load contracts");
     } finally {
@@ -110,19 +119,36 @@ export default function DashboardPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cached =
+      dashboardCache && dashboardCache.address.toLowerCase() === address.toLowerCase();
+    if (cached && dashboardCache) {
+      setContracts(dashboardCache.list);
+      setNameMap(dashboardCache.nameMap);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     load();
-  }, [provider, address, pathname, load]);
+  }, [provider, address, load]);
 
   useEffect(() => {
     if (!provider || !address) return;
     const onFocus = () => {
-      setRefreshing(true);
+      if (Date.now() - lastLoadAtRef.current < FOCUS_REFETCH_MIN_MS) return;
       load();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [provider, address, load]);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) setCreateMenuOpen(false);
+      if (createMenuBottomRef.current && !createMenuBottomRef.current.contains(e.target as Node)) setCreateMenuBottomOpen(false);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
 
   const handleRefresh = () => {
     if (!provider || !address) return;
@@ -130,6 +156,26 @@ export default function DashboardPage() {
     setError(null);
     load();
   };
+
+  const displayName = useCallback(
+    (addr: string) => {
+      const name = nameMap[addr?.toLowerCase() ?? ""]?.trim();
+      return name ? formatUsernameForDisplay(name) : `${addr?.slice(0, 6)}...${addr?.slice(-4) ?? ""}`;
+    },
+    [nameMap]
+  );
+
+  const shortContractId = useCallback((id: string) => (id.startsWith("0x") ? id.slice(2, 10) : id.slice(0, 8)), []);
+  const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+  const isPlaceholder = useCallback((c: ContractRow) => c.client === ZERO_ADDR, []);
+  const isTerminalState = useCallback((state: number) => state === 4 || state === 5 || state === 6 || state === 7, []);
+
+  const activeContracts = useMemo(() => contracts.filter((c) => !isTerminalState(c.state)), [contracts, isTerminalState]);
+  const historyContracts = useMemo(() => contracts.filter((c) => isTerminalState(c.state)), [contracts, isTerminalState]);
+  const totalInEscrow = useMemo(
+    () => activeContracts.reduce((sum, c) => sum + (c.balance ?? 0n), 0n),
+    [activeContracts]
+  );
 
   if (!address) {
     return (
@@ -143,21 +189,6 @@ export default function DashboardPage() {
       </main>
     );
   }
-
-  const displayName = (addr: string) => {
-    const name = nameMap[addr?.toLowerCase() ?? ""]?.trim();
-    return name ? formatUsernameForDisplay(name) : `${addr?.slice(0, 6)}...${addr?.slice(-4) ?? ""}`;
-  };
-
-  const shortContractId = (id: string) => (id.startsWith("0x") ? id.slice(2, 10) : id.slice(0, 8));
-  const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
-  const isPlaceholder = (c: ContractRow) => c.client === ZERO_ADDR;
-
-  const isTerminalState = (state: number) => state === 4 || state === 5 || state === 6 || state === 7;
-  const activeContracts = contracts.filter((c) => !isTerminalState(c.state));
-  const historyContracts = contracts.filter((c) => isTerminalState(c.state));
-
-  const totalInEscrow = activeContracts.reduce((sum, c) => sum + (c.balance ?? 0n), 0n);
 
   if (loading) return <ContractLoader />;
 
@@ -181,13 +212,46 @@ export default function DashboardPage() {
             <NavIcon d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" />
             Dashboard
           </Link>
-          <Link
-            href="/create"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] font-medium text-sm transition-colors"
-          >
-            <NavIcon d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            Create
-          </Link>
+          <div ref={createMenuRef}>
+            <button
+              type="button"
+              onClick={() => setCreateMenuOpen((o) => !o)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-left text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] font-medium text-sm transition-colors"
+            >
+              <NavIcon d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              Create
+              <svg
+                className={`w-4 h-4 ml-auto shrink-0 transition-transform duration-200 ${createMenuOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div
+              className="overflow-hidden transition-[max-height] duration-200 ease-out"
+              style={{ maxHeight: createMenuOpen ? 96 : 0 }}
+            >
+              <div className="py-1 pl-4">
+                <Link
+                  href="/create?role=client"
+                  onClick={() => setCreateMenuOpen(false)}
+                  className="block px-3 py-2 rounded-lg text-sm text-[var(--text-primary)] hover:bg-white/5"
+                >
+                  Create client contract
+                </Link>
+                <Link
+                  href="/create?role=developer"
+                  onClick={() => setCreateMenuOpen(false)}
+                  className="block px-3 py-2 rounded-lg text-sm text-[var(--text-primary)] hover:bg-white/5"
+                >
+                  Create developer contract
+                </Link>
+              </div>
+            </div>
+          </div>
           <Link
             href="/"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] font-medium text-sm transition-colors"
@@ -216,7 +280,14 @@ export default function DashboardPage() {
               </h1>
             </div>
             <AnimatedButton variant="ghost" onClick={handleRefresh} disabled={refreshing || loading} className="shrink-0">
-              {refreshing || loading ? "Loading…" : "Refresh"}
+              {refreshing || loading ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+                Loading
+              </span>
+            ) : (
+              "Refresh"
+            )}
             </AnimatedButton>
           </div>
 
@@ -259,19 +330,31 @@ export default function DashboardPage() {
           {contracts.length === 0 ? (
             <div className="rounded-2xl bg-[var(--bg-secondary)] border border-white/10 shadow-xl p-12 text-center">
               <p className="text-[var(--text-secondary)] mb-4">No contracts yet.</p>
-              <div className="flex flex-wrap justify-center gap-3">
-                <Link
-                  href="/create?role=client"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--solana-green)]/20 text-[var(--solana-green)] font-medium hover:bg-[var(--solana-green)]/30 transition-colors"
+              <div className="relative flex justify-center" ref={createMenuBottomRef}>
+                <AnimatedButton
+                  onClick={() => setCreateMenuBottomOpen((o) => !o)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl"
                 >
-                  Create as client
-                </Link>
-                <Link
-                  href="/create?role=developer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/20 text-[var(--text-secondary)] font-medium hover:bg-white/5 hover:text-[var(--text-primary)] transition-colors"
-                >
-                  Create as developer
-                </Link>
+                  + Create
+                </AnimatedButton>
+                {createMenuBottomOpen && (
+                  <div className="absolute left-1/2 top-full -translate-x-1/2 mt-1 min-w-[200px] py-1 rounded-lg bg-[var(--bg-secondary)] border border-white/10 shadow-xl z-50">
+                    <Link
+                      href="/create?role=client"
+                      onClick={() => setCreateMenuBottomOpen(false)}
+                      className="block px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-white/5 rounded-t-lg"
+                    >
+                      Create client contract
+                    </Link>
+                    <Link
+                      href="/create?role=developer"
+                      onClick={() => setCreateMenuBottomOpen(false)}
+                      className="block px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-white/5 rounded-b-lg"
+                    >
+                      Create developer contract
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -314,22 +397,6 @@ export default function DashboardPage() {
                   </div>
                 </section>
               )}
-
-              <div className="mt-8 pt-6 border-t border-white/10 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/create?role=client"
-                  className="text-sm font-medium text-[var(--solana-green)] hover:underline"
-                >
-                  + Create client contract
-                </Link>
-                <span className="text-[var(--text-muted)]">·</span>
-                <Link
-                  href="/create?role=developer"
-                  className="text-sm font-medium text-[var(--solana-green)] hover:underline"
-                >
-                  Create developer contract
-                </Link>
-              </div>
             </>
           )}
         </div>
@@ -338,7 +405,7 @@ export default function DashboardPage() {
   );
 }
 
-function ContractCard({
+const ContractCard = React.memo(function ContractCard({
   c,
   displayName,
   shortContractId,
@@ -394,4 +461,4 @@ function ContractCard({
       </span>
     </Link>
   );
-}
+});

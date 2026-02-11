@@ -11,7 +11,7 @@ import { getUsername, setUsername as setUsernameOnChain, getAddressByUsernameRea
 import { getReadOnlyProvider } from "@/lib/ethers-provider";
 import { getChainConfig } from "@/lib/constants";
 import { normalizeUsernameForStore, formatUsernameForDisplay } from "@/lib/username";
-import { getActionErrorMessage, getErrorSuggestion } from "@/lib/error-utils";
+import { getActionErrorMessage, getErrorSuggestion, isUserRejection } from "@/lib/error-utils";
 
 type UsernameAvailability = "idle" | "checking" | "available" | "taken" | "own";
 
@@ -28,6 +28,7 @@ export default function Header() {
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [usernameAvailability, setUsernameAvailability] = useState<UsernameAvailability>("idle");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  const [showCanceledPopup, setShowCanceledPopup] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const checkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckRef = useRef<string>("");
@@ -120,7 +121,11 @@ export default function Header() {
       setShowUsernameModal(false);
       setUsernameError(null);
     } catch (e: unknown) {
-      setUsernameError(getErrorSuggestion(getActionErrorMessage(e)) || "Could not save. Please try again.");
+      if (isUserRejection(e)) {
+        setShowCanceledPopup(true);
+      } else {
+        setUsernameError(getErrorSuggestion(getActionErrorMessage(e)) || "Could not save. Please try again.");
+      }
     } finally {
       setSavingUsername(false);
     }
@@ -151,7 +156,7 @@ export default function Header() {
       )}
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-6">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight shrink-0">
-          <Image src="/fhenix.png" alt="" width={28} height={28} className="rounded-md shrink-0" />
+          <Image src="/fhenix.png" alt="" width={28} height={28} className="rounded-md shrink-0" priority />
           <span className="bg-gradient-to-r from-[var(--solana-green)] to-[var(--solana-blue)] bg-clip-text text-transparent">FhenixEscrow</span>
         </Link>
         <nav className="flex items-center gap-1">
@@ -250,9 +255,27 @@ export default function Header() {
               onClick={handleSaveUsername}
               disabled={savingUsername || !editInput.trim() || usernameAvailability === "taken" || usernameAvailability === "checking"}
             >
-              {savingUsername ? "Saving…" : "Save"}
+              {savingUsername ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-block h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+                  Saving
+                </span>
+              ) : (
+                "Save"
+              )}
             </AnimatedButton>
           </div>
+        </Modal>
+      )}
+
+      {showCanceledPopup && (
+        <Modal title="Transaction was canceled" onClose={() => setShowCanceledPopup(false)}>
+          <p className="text-sm text-[var(--text-muted)] mb-4">
+            The transaction was canceled. You can try again when you&apos;re ready.
+          </p>
+          <AnimatedButton onClick={() => setShowCanceledPopup(false)} className="w-full">
+            OK
+          </AnimatedButton>
         </Modal>
       )}
     </header>

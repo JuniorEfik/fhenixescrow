@@ -10,8 +10,9 @@ export async function runCreateContract(
   provider: BrowserProvider,
   clientAddress: string,
   developerAddress: string,
-  totalAmountWei: bigint
+  totalAmountWei: bigint,
+  onProgress?: (message: string) => void
 ) {
   const { createContract } = await import("./escrow-service");
-  return createContract(provider, clientAddress, developerAddress, totalAmountWei);
+  return createContract(provider, clientAddress, developerAddress, totalAmountWei, onProgress);
 }

@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["cofhejs"],
   experimental: {
-    optimizePackageImports: ["ethers", "date-fns", "framer-motion"],
+    optimizePackageImports: ["ethers", "date-fns", "framer-motion", "three"],
   },
   webpack: (config, { isServer }) => {
     // cofhejs/web.mjs references Node 'fs' etc.; browser build must not resolve them.

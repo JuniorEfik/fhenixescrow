@@ -43,12 +43,15 @@ export async function createContract(
   provider: BrowserProvider,
   clientAddress: string,
   developerAddress: string,
-  totalAmountWei: bigint
+  totalAmountWei: bigint,
+  onProgress?: (message: string) => void
 ): Promise<{ contractId: string; receipt: unknown }> {
   if (!getEscrowContractAddress()) throw new Error("ESCROW_CONTRACT_ADDRESS is not set. Deploy the contract and set it in .env or Netlify.");
+  onProgress?.("Connecting to contract…");
   const { encryptUint128Cofhe } = await import("./cofhe-client");
   const contract = await getEscrowContract(provider);
-  const encryptedTotal = await encryptUint128Cofhe(provider, totalAmountWei);
+  const encryptedTotal = await encryptUint128Cofhe(provider, totalAmountWei, onProgress);
+  onProgress?.("Waiting for wallet signature…");
   const tx = await contract.createContract(clientAddress, developerAddress, {
     ctHash: encryptedTotal.ctHash,
     securityZone: encryptedTotal.securityZone,
@@ -96,12 +99,15 @@ export async function getAddressByUsernameReadOnly(
 export async function createInvite(
   provider: BrowserProvider,
   isClientSide: boolean,
-  totalAmountWei: bigint
+  totalAmountWei: bigint,
+  onProgress?: (message: string) => void
 ): Promise<{ inviteId: string }> {
   if (!getEscrowContractAddress()) throw new Error("ESCROW_CONTRACT_ADDRESS not set");
+  onProgress?.("Connecting to contract…");
   const { encryptUint128Cofhe } = await import("./cofhe-client");
   const contract = await getEscrowContract(provider);
-  const encryptedTotal = await encryptUint128Cofhe(provider, totalAmountWei);
+  const encryptedTotal = await encryptUint128Cofhe(provider, totalAmountWei, onProgress);
+  onProgress?.("Waiting for wallet signature…");
   const tx = await contract.createInvite(isClientSide, {
     ctHash: encryptedTotal.ctHash,
     securityZone: encryptedTotal.securityZone,
@@ -199,11 +205,14 @@ export async function addMilestone(
   provider: BrowserProvider,
   contractId: string,
   amountPortion: number,
-  description: string
+  description: string,
+  onProgress?: (message: string) => void
 ) {
+  onProgress?.("Connecting to contract…");
   const { encryptUint32Cofhe } = await import("./cofhe-client");
   const contract = await getEscrowContract(provider);
-  const encrypted = await encryptUint32Cofhe(provider, amountPortion);
+  const encrypted = await encryptUint32Cofhe(provider, amountPortion, onProgress);
+  onProgress?.("Waiting for wallet signature…");
   const tx = await contract.addMilestone(normalizeContractId(contractId), {
     ctHash: encrypted.ctHash,
     securityZone: encrypted.securityZone,

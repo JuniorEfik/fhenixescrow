@@ -1,11 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense, lazy } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import AnimatedButton from "./AnimatedButton";
 
-const ThreeBackground = lazy(() => import("./ThreeBackground"));
+const ThreeBackground = dynamic(() => import("./ThreeBackground"), { ssr: false });
 
 export default function Hero() {
   return (
